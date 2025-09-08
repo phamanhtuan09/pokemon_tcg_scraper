@@ -2,9 +2,11 @@ services:
   - type: web
     name: pokemon-scraper
     env: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: python pokemon_scraper.py
     plan: free
+    buildCommand: |
+      pip install -r requirements.txt
+      python apply_patch.py
+    startCommand: python pokemon_scraper.py
     envVars:
       - key: TELEGRAM_TOKEN
         sync: false
