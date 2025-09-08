@@ -1,181 +1,130 @@
+from flask import Flask
+import threading
+import json
+import os
+import logging
+import time
 import requests
 from bs4 import BeautifulSoup
 import undetected_chromedriver as uc
-import time
-import logging
-import sys
-import json
-import os
 
-# ----------------- CONFIG -----------------
-MAX_RETRIES = 3
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+app = Flask(__name__)
+
+# Config
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 SEARCH_KEYWORDS = 'pokemon trading cards'
-HEADLESS = True
 CACHE_FILE = 'cache.json'
+HEADLESS = True
+MAX_RETRIES = 3
 
-# ----------------- LOGGING -----------------
-logging.basicConfig(
-    filename='scraper.log',
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO)
 
-# ----------------- TELEGRAM -----------------
-def send_telegram_message(message: str):
+def send_telegram_message(message):
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        logging.warning("Telegram token or chat ID not set.")
+        logging.warning("Missing Telegram config.")
         return
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     try:
-        response = requests.post(url, json={
-            "chat_id": TELEGRAM_CHAT_ID,
-            "text": message,
-            "parse_mode": "Markdown"
-        })
-        response.raise_for_status()
+        requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+            json={"chat_id": TELEGRAM_CHAT_ID, "text": message}
+        )
     except Exception as e:
-        logging.error(f"Telegram Error: {e}")
+        logging.error(f"Telegram error: {e}")
 
-# ----------------- SELENIUM SETUP -----------------
 def get_driver():
-    try:
-        options = uc.ChromeOptions()
-        if HEADLESS:
-            options.add_argument("--headless=new")
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--disable-blink-features=AutomationControlled")
-        driver = uc.Chrome(options=options, use_subprocess=True)
-        return driver
-    except Exception as e:
-        logging.error(f"Failed to start undetected-chromedriver: {e}")
-        sys.exit(1)
+    options = uc.ChromeOptions()
+    if HEADLESS:
+        options.add_argument("--headless=new")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    return uc.Chrome(options=options)
 
-# ----------------- REQUEST WRAPPER -----------------
-def get_with_retry(url, use_selenium=False):
-    for attempt in range(1, MAX_RETRIES + 1):
+def get_with_retry(url):
+    for attempt in range(MAX_RETRIES):
         try:
-            if use_selenium:
-                driver = get_driver()
-                driver.get(url)
-                time.sleep(5)
-                page = driver.page_source
-                driver.quit()
-                return page
-            else:
-                response = requests.get(url, timeout=10)
-                response.raise_for_status()
-                return response.text
+            driver = get_driver()
+            driver.get(url)
+            time.sleep(5)
+            html = driver.page_source
+            driver.quit()
+            return html
         except Exception as e:
-            logging.warning(f"[{attempt}/{MAX_RETRIES}] Failed to get {url}: {e}")
+            logging.warning(f"Retry {attempt + 1}: {e}")
             time.sleep(2)
-    return None
+    return ""
 
-# ----------------- SCRAPERS -----------------
-def scrape_jbhifi():
-    url = f"https://www.jbhifi.com.au/search?query={SEARCH_KEYWORDS.replace(' ', '%20')}"
-    html = get_with_retry(url, use_selenium=True)
+def scrape_site(name, url, selector, prefix, keyword='pokemon'):
+    html = get_with_retry(url)
     if not html:
         return []
-    soup = BeautifulSoup(html, "html.parser")
-    links = [
-        "https://www.jbhifi.com.au" + a.get("href")
-        for a in soup.select(".ais-InfiniteHits-item a")
-        if a.get("href") and "pokemon" in a.get("href").lower()
-    ]
-    return list(set(links))
+    soup = BeautifulSoup(html, 'html.parser')
+    return list(set(
+        prefix + a['href']
+        for a in soup.select(selector)
+        if 'href' in a.attrs and keyword in a['href'].lower()
+    ))
 
-def scrape_kmart():
-    url = f"https://www.kmart.com.au/search/?q={SEARCH_KEYWORDS.replace(' ', '%20')}"
-    html = get_with_retry(url, use_selenium=True)
-    if not html:
-        return []
-    soup = BeautifulSoup(html, "html.parser")
-    links = [
-        "https://www.kmart.com.au" + a.get("href")
-        for a in soup.select("a[href]")
-        if "/product/" in a.get("href") and "pokemon" in a.get("href").lower()
-    ]
-    return list(set(links))
-
-def scrape_target():
-    url = f"https://www.target.com.au/search?text={SEARCH_KEYWORDS.replace(' ', '+')}"
-    html = get_with_retry(url, use_selenium=True)
-    if not html:
-        return []
-    soup = BeautifulSoup(html, "html.parser")
-    links = [
-        "https://www.target.com.au" + a.get("href")
-        for a in soup.select("a[href]")
-        if "/p/" in a.get("href") and "pokemon" in a.get("href").lower()
-    ]
-    return list(set(links))
-
-def scrape_bigw():
-    url = f"https://www.bigw.com.au/search?q={SEARCH_KEYWORDS.replace(' ', '%20')}"
-    html = get_with_retry(url, use_selenium=True)
-    if not html:
-        return []
-    soup = BeautifulSoup(html, "html.parser")
-    links = [
-        "https://www.bigw.com.au" + a.get("href")
-        for a in soup.select("a[href]")
-        if "/product/" in a.get("href") and "pokemon" in a.get("href").lower()
-    ]
-    return list(set(links))
-
-# ----------------- CACHE -----------------
 def load_cache():
-    if os.path.exists(CACHE_FILE):
-        with open(CACHE_FILE, 'r') as f:
-            return json.load(f)
-    return {}
+    if not os.path.exists(CACHE_FILE):
+        return {}
+    with open(CACHE_FILE) as f:
+        return json.load(f)
 
-def save_cache(cache):
+def save_cache(data):
     with open(CACHE_FILE, 'w') as f:
-        json.dump(cache, f, indent=2)
+        json.dump(data, f)
 
-# ----------------- MAIN -----------------
-def main():
-    try:
-        all_links = {
-            "JB Hi-Fi": scrape_jbhifi(),
-            "Kmart": scrape_kmart(),
-            "Target": scrape_target(),
-            "Big W": scrape_bigw()
+def run_scraper():
+    cache = load_cache()
+    new_cache = {}
+    found_links = []
+    sites = {
+        "JB Hi-Fi": {
+            "url": f"https://www.jbhifi.com.au/search?query={SEARCH_KEYWORDS.replace(' ', '%20')}",
+            "selector": ".ais-InfiniteHits-item a",
+            "prefix": "https://www.jbhifi.com.au"
+        },
+        "Kmart": {
+            "url": f"https://www.kmart.com.au/search/?q={SEARCH_KEYWORDS.replace(' ', '%20')}",
+            "selector": "a[href*='/product/']",
+            "prefix": "https://www.kmart.com.au"
+        },
+        "Target": {
+            "url": f"https://www.target.com.au/search?text={SEARCH_KEYWORDS.replace(' ', '+')}",
+            "selector": "a[href*='/p/']",
+            "prefix": "https://www.target.com.au"
+        },
+        "Big W": {
+            "url": f"https://www.bigw.com.au/search?q={SEARCH_KEYWORDS.replace(' ', '%20')}",
+            "selector": "a[href*='/product/']",
+            "prefix": "https://www.bigw.com.au"
         }
+    }
 
-        cache = load_cache()
-        new_cache = {}
-        message = "🧩 *Pokémon TCG - New Products Found:*\n\n"
-        found = False
+    for site, conf in sites.items():
+        links = scrape_site(site, conf['url'], conf['selector'], conf['prefix'])
+        old = cache.get(site, [])
+        new = [l for l in links if l not in old]
+        if new:
+            found_links.append(f"*{site}*\n" + "\n".join(new))
+        new_cache[site] = list(set(old + links))
 
-        for site, links in all_links.items():
-            new_links = []
-            old_links = cache.get(site, [])
-            for link in links:
-                if link not in old_links:
-                    new_links.append(link)
+    if found_links:
+        message = "🧩 *New Pokémon TCG Products:*\n\n" + "\n\n".join(found_links)
+        send_telegram_message(message)
 
-            if new_links:
-                found = True
-                message += f"*{site}*\n" + "\n".join(new_links) + "\n\n"
+    save_cache(new_cache)
 
-            new_cache[site] = list(set(old_links + links))
+# HTTP endpoint to trigger scraper
+@app.route("/run", methods=["GET"])
+def run():
+    threading.Thread(target=run_scraper).start()
+    return "Scraper started!", 200
 
-        if found:
-            send_telegram_message(message)
-            logging.info("New products sent to Telegram.")
-        else:
-            logging.info("No new products found.")
-
-        save_cache(new_cache)
-
-    except Exception as e:
-        logging.error(f"Unexpected error in main: {e}")
-        send_telegram_message(f"❗ Bot Error: {e}")
+@app.route("/")
+def home():
+    return "🟢 Pokemon Scraper Bot is running."
 
 if __name__ == "__main__":
-    main()
+    app.run(host="0.0.0.0", port=10000)
