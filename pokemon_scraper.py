@@ -7,6 +7,8 @@ import time
 import requests
 from bs4 import BeautifulSoup
 import undetected_chromedriver as uc
+import sys
+print(f"✅ Running Python version: {sys.version}")
 
 app = Flask(__name__)
 
