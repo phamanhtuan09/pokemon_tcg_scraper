@@ -94,7 +94,7 @@ def run_scraper():
     sites = {
         "JB Hi-Fi": {
             "url": f"https://www.jbhifi.com.au/search?query={SEARCH_KEYWORDS.replace(' ', '%20')}",
-            "selector": ".ais-InfiniteHits-item a",
+            "selector": ".ProductCard_imageLink a",
             "prefix": "https://www.jbhifi.com.au"
         },
         "Kmart": {
