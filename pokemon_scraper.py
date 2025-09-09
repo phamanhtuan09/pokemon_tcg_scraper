@@ -87,22 +87,39 @@ def scrape_jbhifi_playwright():
     url = "https://www.jbhifi.com.au/collections/collectibles-merchandise/pokemon-trading-cards"
 
     links = []
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
-        page.goto(url, wait_until='networkidle')
-        page.wait_for_selector('a.product-item__title', timeout=15000)
-        elements = page.query_selector_all('a.product-item__title')
-        for el in elements:
-            href = el.get_attribute('href')
-            if href:
-                if href.startswith('/'):
-                    href = 'https://www.jbhifi.com.au' + href
-                links.append(href)
-        browser.close()
-    unique_links = list(set(links))
-    logging.info(f"🔗 JB Hi-Fi: {len(unique_links)} links found")
-    return unique_links
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.70 Safari/537.36"
+            )
+            page = context.new_page()
+
+            # Optional: block images/fonts for faster load
+            page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "stylesheet", "font"] else route.continue_())
+
+            page.goto(url, wait_until="domcontentloaded", timeout=60000)
+
+            # Đợi một chút nếu cần
+            page.wait_for_timeout(2000)
+
+            # Tùy vào layout mới của JB Hi-Fi
+            a_tags = page.query_selector_all("a[href*='/products/']")
+            for a in a_tags:
+                href = a.get_attribute("href")
+                if href:
+                    if not href.startswith("http"):
+                        href = "https://www.jbhifi.com.au" + href
+                    links.append(href)
+
+            logging.info(f"🔗 JB Hi-Fi (Playwright): {len(links)} links found")
+            context.close()
+            browser.close()
+            return list(set(links))
+
+    except Exception as e:
+        logging.error(f"❌ JB Hi-Fi Playwright error: {e}")
+        return []
 
 def scrape_kmart():
     logging.info("🔍 Scraping Kmart")
