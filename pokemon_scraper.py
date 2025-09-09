@@ -80,29 +80,27 @@ def scrape_site(name, url, selector, prefix, keyword="pokemon"):
     logging.info(f"🔗 {name}: {len(unique_links)} links found")
     return unique_links
 
-def scrape_jbhifi_api():
-    logging.info("🔍 Scraping JB Hi-Fi via API")
-    # API endpoint lấy dữ liệu sản phẩm trên trang JB Hi-Fi với bộ lọc bộ sưu tập Pokémon Trading Cards
-    # Lấy ví dụ: https://www.jbhifi.com.au/api/catalog/products?collection=collectibles-merchandise%2Fpokemon-trading-cards&limit=100
-    url = "https://www.jbhifi.com.au/api/catalog/products"
-    params = {
-        "collection": "collectibles-merchandise/pokemon-trading-cards",
-        "limit": "100"
-    }
-    try:
-        res = requests.get(url, headers=HEADERS, params=params, timeout=15)
-        res.raise_for_status()
-        data = res.json()
-        links = []
-        for product in data.get("products", []):
-            handle = product.get("handle")
-            if handle:
-                links.append(f"https://www.jbhifi.com.au/products/{handle}")
-        logging.info(f"🔗 JB Hi-Fi API: {len(links)} links found")
-        return links
-    except Exception as e:
-        logging.error(f"❌ JB Hi-Fi API scraping error: {e}")
-        return []
+def scrape_jbhifi_playwright():
+    logging.info("🔍 Scraping JB Hi-Fi with Playwright")
+    url = "https://www.jbhifi.com.au/collections/collectibles-merchandise/pokemon-trading-cards"
+
+    links = []
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(url, wait_until='networkidle')
+        page.wait_for_selector('a.product-item__title', timeout=15000)
+        elements = page.query_selector_all('a.product-item__title')
+        for el in elements:
+            href = el.get_attribute('href')
+            if href:
+                if href.startswith('/'):
+                    href = 'https://www.jbhifi.com.au' + href
+                links.append(href)
+        browser.close()
+    unique_links = list(set(links))
+    logging.info(f"🔗 JB Hi-Fi: {len(unique_links)} links found")
+    return unique_links
 
 def scrape_kmart():
     logging.info("🔍 Scraping Kmart")
@@ -144,28 +142,28 @@ def run_scraper():
 
     # Các trang web
     sites = {
-        "JB Hi-Fi": {"func": scrape_jbhifi_api},
-        "Kmart": {"func": scrape_kmart},
+        "JB Hi-Fi": {"func": scrape_jbhifi_playwright},
+        # "Kmart": {"func": scrape_kmart},
         "Target": {
             "url": f"https://www.target.com.au/search?text=trading+cards&group_id=W1852642",
             "selector": "a[href*='/p/']",
             "prefix": "https://www.target.com.au"
         },
-        "Big W": {
-            "url": f"https://www.bigw.com.au/search?text={SEARCH_KEYWORDS.replace(' ', '+')}",
-            "selector": "a[href*='/product/']",
-            "prefix": "https://www.bigw.com.au"
-        },
-        "Zingpopculture": {
-            "url": f"https://www.zingpopculture.com.au/search?attributes=franchise%3Apokemon&category=toys-hobbies&subcategory=toys-hobbies-trading-cards",
-            "selector": "a.product-link",
-            "prefix": "https://www.zingpopculture.com.au"
-        },
-        "Toymate": {
-            "url": f"https://toymate.com.au/pokemon/?Product+Category=Trading+Cards",
-            "selector": "a.product-item-link",
-            "prefix": "https://www.toymate.com.au"
-        }
+        # "Big W": {
+        #     "url": f"https://www.bigw.com.au/search?text={SEARCH_KEYWORDS.replace(' ', '+')}",
+        #     "selector": "a[href*='/product/']",
+        #     "prefix": "https://www.bigw.com.au"
+        # },
+        # "Zingpopculture": {
+        #     "url": f"https://www.zingpopculture.com.au/search?attributes=franchise%3Apokemon&category=toys-hobbies&subcategory=toys-hobbies-trading-cards",
+        #     "selector": "a.product-link",
+        #     "prefix": "https://www.zingpopculture.com.au"
+        # },
+        # "Toymate": {
+        #     "url": f"https://toymate.com.au/pokemon/?Product+Category=Trading+Cards",
+        #     "selector": "a.product-item-link",
+        #     "prefix": "https://www.toymate.com.au"
+        # }
     }
 
     for site, conf in sites.items():
