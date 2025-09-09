@@ -103,8 +103,14 @@ def scrape_jbhifi_playwright():
             # Đợi một chút nếu cần
             page.wait_for_timeout(2000)
 
+            logging.info(f"🔍 JB Hi-Fi page HTML:\n{page[:3000]}")
+            html = page.content()
+            logging.info(f"🔍 JB Hi-Fi HTML:\n{html[:3000]}")  # chỉ log 3000 ký tự đầu
+
+
             # Tùy vào layout mới của JB Hi-Fi
             a_tags = page.query_selector_all("a[href*='/products/']")
+            logging.info(f"🔍 JB Hi-Fi page HTML:\n{a_tags}")
             for a in a_tags:
                 href = a.get_attribute("href")
                 if href:
