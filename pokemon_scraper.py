@@ -112,10 +112,10 @@ def scrape_jbhifi_playwright():
             page.goto(url, wait_until="domcontentloaded", timeout=60000)
 
             # Đợi phần tử chính xuất hiện
-            # page.wait_for_selector("a.ProductCard_imageLink[href*='/products/']", timeout=10000)
+            page.wait_for_selector("a[href*='/products/']", timeout=10000)
 
             # Đợi một chút nếu cần
-            page.wait_for_timeout(2000)
+            # page.wait_for_timeout(2000)
 
             # Xuất HTML ra file và gửi qua Telegram
             html = page.content()
@@ -126,7 +126,7 @@ def scrape_jbhifi_playwright():
             send_file_to_telegram(file_path)
 
             # Tùy vào layout mới của JB Hi-Fi
-            a_tags = page.query_selector_all("a.ProductCard_imageLink[href*='/products/']")
+            a_tags = page.query_selector_all("a[href*='/products/']")
             for a in a_tags:
                 href = a.get_attribute("href")
                 if href:
