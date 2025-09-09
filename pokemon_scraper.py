@@ -49,6 +49,17 @@ def send_telegram_message(message):
     except Exception as e:
         logging.error(f"❌ Telegram error: {e}")
 
+def send_file_to_telegram(file_path, caption="HTML snapshot"):
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument"
+    with open(file_path, "rb") as f:
+        files = {"document": (file_path, f)}
+        data = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "caption": caption
+        }
+        response = requests.post(url, data=data, files=files)
+    return response.json()
+
 # ============= SCRAPER =====================
 
 def get_html_with_retry(url):
@@ -89,7 +100,7 @@ def scrape_jbhifi_playwright():
     links = []
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            browser = p.chromium.launch(headless=False)
             context = browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.70 Safari/537.36"
             )
@@ -100,8 +111,19 @@ def scrape_jbhifi_playwright():
 
             page.goto(url, wait_until="domcontentloaded", timeout=60000)
 
+            # Đợi phần tử chính xuất hiện
+            page.wait_for_selector("a.ProductCard_imageLink[href*='/products/']", timeout=10000)
+
             # Đợi một chút nếu cần
-            page.wait_for_timeout(2000)
+            # page.wait_for_timeout(2000)
+
+            # Xuất HTML ra file và gửi qua Telegram
+            html = page.content()
+            file_path = "jb.html"
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(html)
+            
+            send_file_to_telegram(file_path)
 
             # Tùy vào layout mới của JB Hi-Fi
             a_tags = page.query_selector_all("a.ProductCard_imageLink[href*='/products/']")
