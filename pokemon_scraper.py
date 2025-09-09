@@ -98,8 +98,8 @@ def run_scraper():
 
     sites = {
         "JB Hi-Fi": {
-            "url": f"https://www.jbhifi.com.au/search?query={SEARCH_KEYWORDS.replace(' ', '%20')}",
-            "selector": "a[href*='/products/']",
+            "url": f"https://www.jbhifi.com.au/collections/collectibles-merchandise/pokemon-trading-cards",
+            "selector": "a.ProductCard_imageLink",
             "prefix": "https://www.jbhifi.com.au"
         },
         "Kmart": {
