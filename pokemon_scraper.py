@@ -100,7 +100,7 @@ def scrape_jbhifi_playwright():
     links = []
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=False)
+            browser = p.chromium.launch(headless=True)
             context = browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.70 Safari/537.36"
             )
@@ -112,10 +112,10 @@ def scrape_jbhifi_playwright():
             page.goto(url, wait_until="domcontentloaded", timeout=60000)
 
             # Đợi phần tử chính xuất hiện
-            page.wait_for_selector("a.ProductCard_imageLink[href*='/products/']", timeout=10000)
+            # page.wait_for_selector("a.ProductCard_imageLink[href*='/products/']", timeout=10000)
 
             # Đợi một chút nếu cần
-            # page.wait_for_timeout(2000)
+            page.wait_for_timeout(2000)
 
             # Xuất HTML ra file và gửi qua Telegram
             html = page.content()
