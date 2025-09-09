@@ -99,11 +99,11 @@ def run_scraper():
     sites = {
         "JB Hi-Fi": {
             "url": f"https://www.jbhifi.com.au/collections/collectibles-merchandise/pokemon-trading-cards",
-            "selector": "a.ProductCard_imageLink",
+            "selector": "a.ProductCard_imageLink[href*='/products/']",
             "prefix": "https://www.jbhifi.com.au"
         },
         "Kmart": {
-            "url": f"https://www.kmart.com.au/search/?searchTerm={SEARCH_KEYWORDS.replace(' ', '%20')}",
+            "url": f"https://www.kmart.com.au/category/toys/{SEARCH_KEYWORDS.replace(' ', '-')}/",
             "selector": "a.product-link",
             "prefix": "https://www.kmart.com.au"
         },
