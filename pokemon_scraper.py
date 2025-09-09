@@ -6,21 +6,17 @@ import logging
 import time
 import requests
 from bs4 import BeautifulSoup
-import undetected_chromedriver as uc
 from flask import Flask
-import subprocess
 
 app = Flask(__name__)
 
-# =================== CONFIG ===================
+# =============== CONFIG ====================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 SEARCH_KEYWORDS = 'pokemon trading cards'
 CACHE_FILE = 'cache.json'
-HEADLESS = True
+HEADERS = {"User-Agent": "Mozilla/5.0"}
 MAX_RETRIES = 3
-
-CHROMIUM_PATH = "/tmp/chromium-linux/chrome-linux/chrome"
 
 logging.basicConfig(
     level=logging.INFO,
@@ -28,113 +24,73 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()]
 )
 
-logging.info(f"✅ Starting scraper with Python {sys.version}")
-logging.info(f"✅ TELEGRAM_CHAT_ID: {'✅ Loaded' if TELEGRAM_CHAT_ID else '❌ Missing'}")
+logging.info(f"✅ Python {sys.version}")
 logging.info(f"✅ TELEGRAM_TOKEN: {'✅ Loaded' if TELEGRAM_TOKEN else '❌ Missing'}")
+logging.info(f"✅ TELEGRAM_CHAT_ID: {'✅ Loaded' if TELEGRAM_CHAT_ID else '❌ Missing'}")
 
-def download_chromium():
-    if os.path.exists(CHROMIUM_PATH):
-        logging.info(f"✅ Chromium binary found at {CHROMIUM_PATH}")
-        return
-
-    logging.info("⬇️ Downloading Chromium...")
-    url = "https://commondatastorage.googleapis.com/chromium-browser-snapshots/Linux_x64/1147401/chrome-linux.zip"
-    try:
-        subprocess.run(["curl", "-L", "-o", "/tmp/chrome-linux.zip", url], check=True)
-        subprocess.run(["unzip", "-o", "/tmp/chrome-linux.zip", "-d", "/tmp/"], check=True)
-        os.chmod(CHROMIUM_PATH, 0o755)
-        logging.info(f"✅ Chromium downloaded and ready at {CHROMIUM_PATH}")
-    except Exception as e:
-        logging.error(f"❌ Failed to download Chromium: {e}")
+# ============ TELEGRAM =====================
 
 def send_telegram_message(message):
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        logging.warning("❌ Missing Telegram configuration.")
+        logging.warning("❌ Missing Telegram config.")
         return
     try:
         resp = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
             json={"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
         )
-        logging.info(f"📨 Telegram sent. Status: {resp.status_code}, Response: {resp.text}")
+        logging.info(f"📨 Telegram sent. Status: {resp.status_code}")
     except Exception as e:
-        logging.error(f"Telegram error: {e}")
+        logging.error(f"❌ Telegram error: {e}")
 
-def get_driver():
-    download_chromium()  # đảm bảo có Chromium
+# ============= SCRAPER =====================
 
-    options = uc.ChromeOptions()
-    if HEADLESS:
-        options.add_argument("--headless=new")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-blink-features=AutomationControlled")
-
-    try:
-        driver = uc.Chrome(
-            options=options,
-            browser_executable_path=CHROMIUM_PATH
-        )
-        logging.info("🚗 Chrome driver initialized successfully.")
-        return driver
-    except Exception as e:
-        logging.error(f"❌ Failed to initialize Chrome driver: {e}")
-        raise
-
-def get_with_retry(url):
+def get_html_with_retry(url):
     for attempt in range(1, MAX_RETRIES + 1):
         try:
-            logging.info(f"🌐 Getting URL (Attempt {attempt}): {url}")
-            driver = get_driver()
-            driver.get(url)
-            time.sleep(5)
-            html = driver.page_source
-            driver.quit()
-            logging.info(f"✅ Successfully got HTML from: {url}")
-            return html
+            logging.info(f"🌐 Fetching: {url} (Attempt {attempt})")
+            res = requests.get(url, headers=HEADERS, timeout=15)
+            res.raise_for_status()
+            return res.text
         except Exception as e:
-            logging.warning(f"⚠️ Retry {attempt}: {e}")
+            logging.warning(f"⚠️ Attempt {attempt} failed: {e}")
             time.sleep(2)
-    logging.error(f"❌ Failed to fetch URL after {MAX_RETRIES} attempts: {url}")
+    logging.error(f"❌ Failed to fetch after {MAX_RETRIES} attempts: {url}")
     return ""
 
-def scrape_site(name, url, selector, prefix, keyword='pokemon'):
-    logging.info(f"🔍 Scraping site: {name}")
-    html = get_with_retry(url)
+def scrape_site(name, url, selector, prefix, keyword="pokemon"):
+    logging.info(f"🔍 Scraping {name}")
+    html = get_html_with_retry(url)
     if not html:
-        logging.warning(f"⚠️ No HTML received for {name}")
+        logging.warning(f"⚠️ No HTML for {name}")
         return []
 
     soup = BeautifulSoup(html, 'html.parser')
-    links = list(set(
-        prefix + a['href']
+    links = [
+        prefix + a['href'] if not a['href'].startswith("http") else a['href']
         for a in soup.select(selector)
-        if 'href' in a.attrs and keyword in a['href'].lower()
-    ))
-
-    logging.info(f"🔗 Found {len(links)} links on {name}")
-    return links
+        if 'href' in a.attrs and keyword.lower() in a['href'].lower()
+    ]
+    unique_links = list(set(links))
+    logging.info(f"🔗 {name}: {len(unique_links)} links found")
+    return unique_links
 
 def load_cache():
     if not os.path.exists(CACHE_FILE):
-        logging.info("📁 No cache file found. Starting fresh.")
         return {}
     with open(CACHE_FILE) as f:
-        cache = json.load(f)
-        logging.info(f"📦 Loaded cache: {sum(len(v) for v in cache.values())} total links")
-        return cache
+        return json.load(f)
 
 def save_cache(data):
     with open(CACHE_FILE, 'w') as f:
         json.dump(data, f)
-    logging.info(f"💾 Cache saved with {sum(len(v) for v in data.values())} total links")
 
 def run_scraper():
-    logging.info("🚀 Running scraper...")
-
+    logging.info("🚀 Starting scraper")
     cache = load_cache()
     new_cache = {}
     found_links = []
+
     sites = {
         "JB Hi-Fi": {
             "url": f"https://www.jbhifi.com.au/search?query={SEARCH_KEYWORDS.replace(' ', '%20')}",
@@ -173,8 +129,6 @@ def run_scraper():
         old = cache.get(site, [])
         new = [l for l in links if l not in old]
 
-        logging.info(f"➕ {site}: {len(new)} new links")
-
         if new:
             found_links.append(f"*{site}*\n" + "\n".join(new))
         new_cache[site] = list(set(old + links))
@@ -186,7 +140,7 @@ def run_scraper():
         logging.info("ℹ️ No new links found.")
 
     save_cache(new_cache)
-    logging.info("✅ Scraper run complete.")
+    logging.info("✅ Scraper finished.")
 
 # ============= HTTP ENDPOINTS ==============
 
@@ -200,6 +154,6 @@ def run():
 def home():
     return "🟢 Pokemon Scraper Bot is running."
 
-# ================ MAIN =====================
+# ================ MAIN ======================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=10000)
