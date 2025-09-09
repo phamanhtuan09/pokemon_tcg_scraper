@@ -1,6 +1,4 @@
 flask
 requests
-webdriver-manager
-selenium>=4.10.0
+playwright
 beautifulsoup4
-undetected-chromedriver
