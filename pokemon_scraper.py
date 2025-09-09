@@ -5,7 +5,6 @@ import os
 import logging
 import time
 import requests
-from bs4 import BeautifulSoup
 from flask import Flask
 
 app = Flask(__name__)
@@ -41,7 +40,7 @@ def send_telegram_message(message):
                 "chat_id": TELEGRAM_CHAT_ID,
                 "text": message,
                 "parse_mode": "Markdown",
-                "disable_web_page_preview": False  # ✅ Cho phép Telegram hiển thị ảnh preview
+                "disable_web_page_preview": False
             }
         )
         logging.info(f"📨 Telegram sent. Status: {resp.status_code}")
@@ -70,6 +69,7 @@ def scrape_site(name, url, selector, prefix, keyword="pokemon"):
         logging.warning(f"⚠️ No HTML for {name}")
         return []
 
+    from bs4 import BeautifulSoup
     soup = BeautifulSoup(html, 'html.parser')
     links = [
         prefix + a['href'] if not a['href'].startswith("http") else a['href']
@@ -78,6 +78,52 @@ def scrape_site(name, url, selector, prefix, keyword="pokemon"):
     ]
     unique_links = list(set(links))
     logging.info(f"🔗 {name}: {len(unique_links)} links found")
+    return unique_links
+
+def scrape_jbhifi_api():
+    logging.info("🔍 Scraping JB Hi-Fi via API")
+    # API endpoint lấy dữ liệu sản phẩm trên trang JB Hi-Fi với bộ lọc bộ sưu tập Pokémon Trading Cards
+    # Lấy ví dụ: https://www.jbhifi.com.au/api/catalog/products?collection=collectibles-merchandise%2Fpokemon-trading-cards&limit=100
+    url = "https://www.jbhifi.com.au/api/catalog/products"
+    params = {
+        "collection": "collectibles-merchandise/pokemon-trading-cards",
+        "limit": "100"
+    }
+    try:
+        res = requests.get(url, headers=HEADERS, params=params, timeout=15)
+        res.raise_for_status()
+        data = res.json()
+        links = []
+        for product in data.get("products", []):
+            handle = product.get("handle")
+            if handle:
+                links.append(f"https://www.jbhifi.com.au/products/{handle}")
+        logging.info(f"🔗 JB Hi-Fi API: {len(links)} links found")
+        return links
+    except Exception as e:
+        logging.error(f"❌ JB Hi-Fi API scraping error: {e}")
+        return []
+
+def scrape_kmart():
+    logging.info("🔍 Scraping Kmart")
+    url = "https://www.kmart.com.au/category/toys/pokemon-trading-cards/"
+    html = get_html_with_retry(url)
+    if not html:
+        logging.warning("⚠️ No HTML for Kmart")
+        return []
+
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, 'html.parser')
+    # Selector sản phẩm Kmart hiện tại
+    product_links = []
+    for a in soup.select('a.product-card__link'):
+        href = a.get('href')
+        if href:
+            if href.startswith('/'):
+                href = 'https://www.kmart.com.au' + href
+            product_links.append(href)
+    unique_links = list(set(product_links))
+    logging.info(f"🔗 Kmart: {len(unique_links)} links found")
     return unique_links
 
 def load_cache():
@@ -96,17 +142,10 @@ def run_scraper():
     new_cache = {}
     found_links = []
 
+    # Các trang web
     sites = {
-        "JB Hi-Fi": {
-            "url": f"https://www.jbhifi.com.au/collections/collectibles-merchandise/pokemon-trading-cards",
-            "selector": "a.ProductCard_imageLink[href*='/products/']",
-            "prefix": "https://www.jbhifi.com.au"
-        },
-        "Kmart": {
-            "url": f"https://www.kmart.com.au/category/toys/{SEARCH_KEYWORDS.replace(' ', '-')}/",
-            "selector": "a.product-link",
-            "prefix": "https://www.kmart.com.au"
-        },
+        "JB Hi-Fi": {"func": scrape_jbhifi_api},
+        "Kmart": {"func": scrape_kmart},
         "Target": {
             "url": f"https://www.target.com.au/search?text=trading+cards&group_id=W1852642",
             "selector": "a[href*='/p/']",
@@ -130,12 +169,14 @@ def run_scraper():
     }
 
     for site, conf in sites.items():
-        links = scrape_site(site, conf['url'], conf['selector'], conf['prefix'])
+        if "func" in conf:
+            links = conf["func"]()
+        else:
+            links = scrape_site(site, conf['url'], conf['selector'], conf['prefix'])
         old = cache.get(site, [])
         new = [l for l in links if l not in old]
 
         if new:
-            # ⚠️ Để mỗi link nằm một dòng, Telegram sẽ tự hiện preview nếu trang hỗ trợ
             formatted_links = "\n".join(new)
             found_links.append(f"*{site}*\n{formatted_links}")
         new_cache[site] = list(set(old + links))
@@ -150,6 +191,8 @@ def run_scraper():
     logging.info("✅ Scraper finished.")
 
 # ============= HTTP ENDPOINTS ==============
+
+from flask import request
 
 @app.route("/run", methods=["GET"])
 def run():
