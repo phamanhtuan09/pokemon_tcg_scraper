@@ -37,7 +37,12 @@ def send_telegram_message(message):
     try:
         resp = requests.post(
             f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
-            json={"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
+            json={
+                "chat_id": TELEGRAM_CHAT_ID,
+                "text": message,
+                "parse_mode": "Markdown",
+                "disable_web_page_preview": False  # ✅ Cho phép Telegram hiển thị ảnh preview
+            }
         )
         logging.info(f"📨 Telegram sent. Status: {resp.status_code}")
     except Exception as e:
@@ -94,11 +99,11 @@ def run_scraper():
     sites = {
         "JB Hi-Fi": {
             "url": f"https://www.jbhifi.com.au/search?query={SEARCH_KEYWORDS.replace(' ', '%20')}",
-            "selector": ".ProductCard_imageLink a",
+            "selector": "a.ProductCard_imageLink",
             "prefix": "https://www.jbhifi.com.au"
         },
         "Kmart": {
-            "url": f"https://www.kmart.com.au/search/?q={SEARCH_KEYWORDS.replace(' ', '%20')}",
+            "url": f"https://www.kmart.com.au/search/?searchTerm={SEARCH_KEYWORDS.replace(' ', '%20')}",
             "selector": "a[href*='/product/']",
             "prefix": "https://www.kmart.com.au"
         },
@@ -108,18 +113,18 @@ def run_scraper():
             "prefix": "https://www.target.com.au"
         },
         "Big W": {
-            "url": f"https://www.bigw.com.au/search?q={SEARCH_KEYWORDS.replace(' ', '%20')}",
+            "url": f"https://www.bigw.com.au/search?text={SEARCH_KEYWORDS.replace(' ', '+')}",
             "selector": "a[href*='/product/']",
             "prefix": "https://www.bigw.com.au"
         },
         "Zingpopculture": {
-            "url": f"https://www.zingpopculture.com/search?q={SEARCH_KEYWORDS.replace(' ', '+')}",
-            "selector": "a.product-item-link",
-            "prefix": "https://www.zingpopculture.com"
+            "url": f"https://www.zingpopculture.com.au/search?attributes=franchise%3Apokemon&category=toys-hobbies&subcategory=toys-hobbies-trading-cards",
+            "selector": "a.product-link",
+            "prefix": "https://www.zingpopculture.com.au"
         },
         "Toymate": {
-            "url": f"https://www.toymate.com.au/search?q={SEARCH_KEYWORDS.replace(' ', '+')}",
-            "selector": "a.product-title",
+            "url": f"https://toymate.com.au/pokemon/?Product+Category=Trading+Cards",
+            "selector": "a.product-item-link",
             "prefix": "https://www.toymate.com.au"
         }
     }
@@ -130,7 +135,9 @@ def run_scraper():
         new = [l for l in links if l not in old]
 
         if new:
-            found_links.append(f"*{site}*\n" + "\n".join(new))
+            # ⚠️ Để mỗi link nằm một dòng, Telegram sẽ tự hiện preview nếu trang hỗ trợ
+            formatted_links = "\n".join(new)
+            found_links.append(f"*{site}*\n{formatted_links}")
         new_cache[site] = list(set(old + links))
 
     if found_links:
