@@ -11,6 +11,11 @@ from flask import Flask
 
 app = Flask(__name__)
 
+# Check possible browser paths
+possible_paths = ["/usr/bin/chromium-browser", "/usr/bin/chromium", "/usr/bin/google-chrome"]
+for path in possible_paths:
+    print(f"🔎 Checking: {path} → {'✅ EXISTS' if os.path.exists(path) else '❌ NOT FOUND'}")
+
 # =================== CONFIG ===================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
