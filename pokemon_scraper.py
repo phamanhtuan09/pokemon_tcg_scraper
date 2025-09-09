@@ -1,6 +1,4 @@
 import sys
-print(f"✅ Running Python version: {sys.version}")
-
 import threading
 import json
 import os
@@ -54,15 +52,18 @@ def get_driver():
     options.add_argument("--disable-dev-shm-usage")
 
     # Đảm bảo Chrome chạy đúng trên Render
-    options.binary_location = "/usr/bin/chromium-browser"
+    browser_path = "/usr/bin/chromium-browser"
+    if not os.path.exists(browser_path):
+        browser_path = "/usr/bin/chromium"
+    if not os.path.exists(browser_path):
+        browser_path = "/usr/bin/google-chrome"
 
-    logging.info("🚗 Initializing Chrome driver...")
-    try:
-        driver = uc.Chrome(options=options)
-        return driver
-    except Exception as e:
-        logging.error(f"❌ Failed to initialize Chrome: {e}")
-        raise
+    if not os.path.exists(browser_path):
+        raise Exception(f"❌ Không tìm thấy trình duyệt Chromium tại {browser_path}")
+
+    logging.info(f"🧭 Using Chromium at: {browser_path}")
+
+    return uc.Chrome(options=options, browser_executable_path=browser_path)
 
 def get_with_retry(url):
     for attempt in range(1, MAX_RETRIES + 1):
