@@ -8,13 +8,10 @@ import requests
 from bs4 import BeautifulSoup
 import undetected_chromedriver as uc
 from flask import Flask
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
 app = Flask(__name__)
-
-# Check possible browser paths
-possible_paths = ["/usr/bin/chromium-browser", "/usr/bin/chromium", "/usr/bin/google-chrome"]
-for path in possible_paths:
-    print(f"🔎 Checking: {path} → {'✅ EXISTS' if os.path.exists(path) else '❌ NOT FOUND'}")
 
 # =================== CONFIG ===================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -55,20 +52,14 @@ def get_driver():
         options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
+    options.add_argument("--disable-blink-features=AutomationControlled")
 
-    # Đảm bảo Chrome chạy đúng trên Render
-    browser_path = "/usr/bin/chromium-browser"
-    if not os.path.exists(browser_path):
-        browser_path = "/usr/bin/chromium"
-    if not os.path.exists(browser_path):
-        browser_path = "/usr/bin/google-chrome"
-
-    if not os.path.exists(browser_path):
-        raise Exception(f"❌ Không tìm thấy trình duyệt Chromium tại {browser_path}")
-
-    logging.info(f"🧭 Using Chromium at: {browser_path}")
-
-    return uc.Chrome(options=options, browser_executable_path=browser_path)
+    logging.info("🚗 Initializing Chrome driver via webdriver-manager...")
+    driver = uc.Chrome(
+        service=Service(ChromeDriverManager().install()),
+        options=options
+    )
+    return driver
 
 def get_with_retry(url):
     for attempt in range(1, MAX_RETRIES + 1):
