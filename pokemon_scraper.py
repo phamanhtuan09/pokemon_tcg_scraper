@@ -103,7 +103,7 @@ def scrape_jbhifi_playwright():
             # Đợi một chút nếu cần
             page.wait_for_timeout(2000)
 
-            logging.info(f"🔍 JB Hi-Fi page HTML:\n{page[:3000]}")
+            # logging.info(f"🔍 JB Hi-Fi page HTML:\n{page[:3000]}")
             html = page.content()
             logging.info(f"🔍 JB Hi-Fi HTML:\n{html[:3000]}")  # chỉ log 3000 ký tự đầu
 
