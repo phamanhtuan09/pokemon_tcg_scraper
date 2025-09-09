@@ -8,8 +8,7 @@ import requests
 from bs4 import BeautifulSoup
 import undetected_chromedriver as uc
 from flask import Flask
-from selenium.webdriver.chrome.service import Service
-from webdriver_manager.chrome import ChromeDriverManager
+import subprocess
 
 app = Flask(__name__)
 
@@ -21,6 +20,8 @@ CACHE_FILE = 'cache.json'
 HEADLESS = True
 MAX_RETRIES = 3
 
+CHROMIUM_PATH = "/tmp/chromium-linux/chrome-linux/chrome"
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s",
@@ -31,7 +32,20 @@ logging.info(f"✅ Starting scraper with Python {sys.version}")
 logging.info(f"✅ TELEGRAM_CHAT_ID: {'✅ Loaded' if TELEGRAM_CHAT_ID else '❌ Missing'}")
 logging.info(f"✅ TELEGRAM_TOKEN: {'✅ Loaded' if TELEGRAM_TOKEN else '❌ Missing'}")
 
-# ================ UTILS =====================
+def download_chromium():
+    if os.path.exists(CHROMIUM_PATH):
+        logging.info(f"✅ Chromium binary found at {CHROMIUM_PATH}")
+        return
+
+    logging.info("⬇️ Downloading Chromium...")
+    url = "https://commondatastorage.googleapis.com/chromium-browser-snapshots/Linux_x64/1147401/chrome-linux.zip"
+    try:
+        subprocess.run(["curl", "-L", "-o", "/tmp/chrome-linux.zip", url], check=True)
+        subprocess.run(["unzip", "-o", "/tmp/chrome-linux.zip", "-d", "/tmp/"], check=True)
+        os.chmod(CHROMIUM_PATH, 0o755)
+        logging.info(f"✅ Chromium downloaded and ready at {CHROMIUM_PATH}")
+    except Exception as e:
+        logging.error(f"❌ Failed to download Chromium: {e}")
 
 def send_telegram_message(message):
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
@@ -47,6 +61,8 @@ def send_telegram_message(message):
         logging.error(f"Telegram error: {e}")
 
 def get_driver():
+    download_chromium()  # đảm bảo có Chromium
+
     options = uc.ChromeOptions()
     if HEADLESS:
         options.add_argument("--headless=new")
@@ -54,12 +70,16 @@ def get_driver():
     options.add_argument("--disable-dev-shm-usage")
     options.add_argument("--disable-blink-features=AutomationControlled")
 
-    logging.info("🚗 Initializing Chrome driver via webdriver-manager...")
-    driver = uc.Chrome(
-        service=Service(ChromeDriverManager().install()),
-        options=options
-    )
-    return driver
+    try:
+        driver = uc.Chrome(
+            options=options,
+            browser_executable_path=CHROMIUM_PATH
+        )
+        logging.info("🚗 Chrome driver initialized successfully.")
+        return driver
+    except Exception as e:
+        logging.error(f"❌ Failed to initialize Chrome driver: {e}")
+        raise
 
 def get_with_retry(url):
     for attempt in range(1, MAX_RETRIES + 1):
@@ -135,6 +155,16 @@ def run_scraper():
             "url": f"https://www.bigw.com.au/search?q={SEARCH_KEYWORDS.replace(' ', '%20')}",
             "selector": "a[href*='/product/']",
             "prefix": "https://www.bigw.com.au"
+        },
+        "Zingpopculture": {
+            "url": f"https://www.zingpopculture.com/search?q={SEARCH_KEYWORDS.replace(' ', '+')}",
+            "selector": "a.product-item-link",
+            "prefix": "https://www.zingpopculture.com"
+        },
+        "Toymate": {
+            "url": f"https://www.toymate.com.au/search?q={SEARCH_KEYWORDS.replace(' ', '+')}",
+            "selector": "a.product-title",
+            "prefix": "https://www.toymate.com.au"
         }
     }
 
