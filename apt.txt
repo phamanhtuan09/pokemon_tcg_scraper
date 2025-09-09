@@ -1,2 +1,2 @@
-chromium
-fonts-liberation
+curl
+unzip
