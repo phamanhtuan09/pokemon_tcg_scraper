@@ -8,6 +8,7 @@ import threading
 import requests
 from flask import Flask
 from playwright.sync_api import sync_playwright
+from playwright_stealth import stealth_sync
 
 app = Flask(__name__)
 
@@ -102,9 +103,10 @@ def scrape_jbhifi_playwright():
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
             context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.70 Safari/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
             )
             page = context.new_page()
+            stealth_sync(page)
 
             # Optional: block images/fonts for faster load
             page.route("**/*", lambda route: route.abort() if route.request.resource_type in ["image", "stylesheet", "font"] else route.continue_())
@@ -114,16 +116,33 @@ def scrape_jbhifi_playwright():
             # Đợi phần tử chính xuất hiện
             page.wait_for_selector("a[href*='/products/']", timeout=10000)
 
+            # Fake user behavior
+            page.mouse.move(100, 100)
+            page.keyboard.press("ArrowDown")
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            page.wait_for_timeout(5000)
+            
             # Đợi một chút nếu cần
             # page.wait_for_timeout(2000)
 
             # Xuất HTML ra file và gửi qua Telegram
-            html = page.content()
-            file_path = "jb.html"
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(html)
+            # html = page.content()
+            # file_path = "jb.html"
+            # with open(file_path, "w", encoding="utf-8") as f:
+            #     f.write(html)
             
-            send_file_to_telegram(file_path)
+            # send_file_to_telegram(file_path)
+
+            # Đợi selector sản phẩm thật
+            try:
+                page.wait_for_selector("a[href*='/products/']", timeout=10000)
+            except:
+                html = page.content()
+                ile_path = "jb.html"
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(html)
+                send_html_to_telegram(file_path)  # hàm này bạn đã có
+                raise Exception("Không thấy sản phẩm – có thể bị Cloudflare chặn")
 
             # Tùy vào layout mới của JB Hi-Fi
             a_tags = page.query_selector_all("a[href*='/products/']")
