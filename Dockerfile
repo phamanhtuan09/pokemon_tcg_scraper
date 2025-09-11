@@ -16,4 +16,4 @@ COPY . .
 EXPOSE 10000
 
 # Khởi động app
-CMD ["python", "pokemon_scraper.py"]
+CMD ["uvicorn", "pokemon_scraper:app", "--host", "0.0.0.0", "--port", "10000"]
