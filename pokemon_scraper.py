@@ -113,7 +113,13 @@ async def scrape_jbhifi_playwright(proxy: str = None):
     links = []
     try:
         async with async_playwright() as p:
-            browser = await p.chromium.launch(
+            context = await p.chromium.launch(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                viewport={"width": 1024, "height": 768},
+                java_script_enabled=True,
+                bypass_csp=True,
+                record_har_path=None,
+                user_data_dir=BROWSER_PROFILE_DIR,
                 headless=True,
                 args=[
                     "--no-sandbox",
@@ -123,14 +129,6 @@ async def scrape_jbhifi_playwright(proxy: str = None):
                     "--disable-background-networking"
                 ],
                 proxy={"server": proxy} if proxy else None
-            )
-            context = await browser.launch_persistent_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                viewport={"width": 1024, "height": 768},
-                java_script_enabled=True,
-                bypass_csp=True,
-                record_har_path=None,
-                user_data_dir=BROWSER_PROFILE_DIR
             )
             page = await context.new_page()
             await stealth_async(page)
@@ -177,7 +175,6 @@ async def scrape_jbhifi_playwright(proxy: str = None):
 
             logging.info(f"🔗 JB Hi-Fi (Playwright): {len(links)} links found")
             await context.close()
-            await browser.close()
             return list(set(links))
 
     except Exception as e:
