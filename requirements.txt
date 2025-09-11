@@ -3,4 +3,4 @@ uvicorn[standard]
 httpx
 playwright
 beautifulsoup4
-playwright-stealth
+git+https://github.com/AtuboDad/playwright-stealth.git
