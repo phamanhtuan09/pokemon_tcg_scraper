@@ -1,10 +1,10 @@
-# Dùng python slim
-FROM python:3.11-slim
+# ---------------- Stage 1: Builder ----------------
+FROM python:3.11-slim AS builder
 
-# ---------------- Step 1: cài các dependencies tối thiểu cho Chromium
+# Cài dependencies cần thiết cho Chromium + Pyppeteer
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
     ca-certificates \
-    curl \
     fonts-liberation \
     libnss3 \
     libatk-bridge2.0-0 \
@@ -20,26 +20,36 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxss1 \
     libxcursor1 \
     libxinerama1 \
-    wget \
     git \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# ---------------- Step 2: copy requirements và install
+# Copy và cài dependencies Python
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ---------------- Step 3: copy source
-COPY . .
-
-# ---------------- Step 4: set môi trường cho Pyppeteer
-ENV PYPPETEER_HOME=/app/.pyppeteer
-ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
-
-# Pyppeteer sẽ cài Chromium tại /app/.pyppeteer
+# Cài Chromium cho Pyppeteer local
 RUN python -m pyppeteer install --local
 
-# ---------------- Step 5: expose port và CMD
+# Copy toàn bộ source code
+COPY . .
+
+# ---------------- Stage 2: Runtime ----------------
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copy Python packages và source code từ builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+COPY --from=builder /app /app
+
+# Environment variables cho Pyppeteer
+ENV PYPPETEER_HOME=/app/.pyppeteer
+ENV PUPPETEER_EXECUTABLE_PATH=/app/.pyppeteer/chrome-linux/chrome
+
+# Expose port
 EXPOSE 5000
+
 CMD ["python", "pokemon_scraper.py"]
