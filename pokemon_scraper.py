@@ -4,7 +4,8 @@ import random
 import time
 import logging
 from flask import Flask, jsonify
-from playwright.sync_api import sync_playwright
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeoutError
+import requests
 
 # ---------------- Logging ----------------
 logging.basicConfig(
@@ -70,18 +71,32 @@ def crawl_links():
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            viewport={"width": 1280, "height": 800}
+            viewport={"width": 1280, "height": 800},
+            java_script_enabled=True
         )
         page = context.new_page()
-        page.goto(URL)
+
+        # Debug network requests/responses
+        page.on("request", lambda r: logging.debug(f"Request: {r.url}"))
+        page.on("response", lambda r: logging.debug(f"Response: {r.url} -> {r.status}"))
+
+        try:
+            page.goto(URL, wait_until="networkidle", timeout=120000)
+            logging.info(f"Page loaded successfully: {URL}")
+        except PlaywrightTimeoutError as e:
+            logging.error(f"Page.goto timeout: {e}")
+            page.screenshot(path="error_screenshot.png")
+            return []
 
         # Scroll & load dynamically
         last_height = 0
-        for i in range(30):  # max scroll 30 lần
+        for i in range(50):  # max scroll 50 lần
             page.evaluate("window.scrollBy(0, window.innerHeight)")
             time.sleep(random.uniform(1.0, 2.5))  # random delay chống bot
             new_height = page.evaluate("document.body.scrollHeight")
+            logging.info(f"Scroll batch {i+1}, new_height={new_height}")
             if new_height == last_height:
+                logging.info("No more scroll, reached bottom")
                 break
             last_height = new_height
 
