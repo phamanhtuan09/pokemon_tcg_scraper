@@ -3,4 +3,4 @@ uvicorn[standard]
 httpx
 playwright==1.55.0
 beautifulsoup4
-https://github.com/AtuboDad/playwright-stealth/archive/refs/heads/master.zip
+https://github.com/AtuboDad/playwright_stealth/archive/refs/heads/main.zip
