@@ -10,7 +10,7 @@ from playwright.async_api import async_playwright
 from playwright_stealth import stealth_async
 from bs4 import BeautifulSoup
 
-app = Flask(__name__)
+app =  FastAPI()
 
 # =============== CONFIG ====================
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
@@ -24,8 +24,6 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s"
 )
-
-app =  FastAPI()
 
 logging.info(f"✅ Python {sys.version}")
 logging.info(f"✅ TELEGRAM_TOKEN: {'✅ Loaded' if TELEGRAM_TOKEN else '❌ Missing'}")
