@@ -72,7 +72,7 @@ def get_from_algolia() -> List[str]:
         hits = r.json().get("hits", [])
         links = [f"https://www.jbhifi.com.au/products/{h['handle']}" 
                  for h in hits 
-                 if h.get("preamble") == "Card Game" and h.get("vendor") == "POKEMON TCG" and h.get("handle")]
+                 if h.get("preamble") == "Card Game" and h.get("vendor") == "POKEMON TCG" and h.get("tags") == "InStock" and h.get("handle")]
         logger.info(f"Algolia returned {len(links)} Pokémon links")
         return links
     except Exception as e:
@@ -126,7 +126,8 @@ def get_from_browserless() -> List[str]:
 
 # ---------------- Crawl ----------------
 def crawl_links() -> List[str]:
-    links = get_from_algolia()
+    links = get_from_browserless()
+    # links = get_from_algolia()
     # if not links:
     #     logger.info("Algolia empty, fallback to Browserless")
     #     links = get_from_browserless()
