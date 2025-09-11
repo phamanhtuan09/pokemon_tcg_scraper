@@ -124,7 +124,7 @@ async def scrape_jbhifi_playwright(proxy: str = None):
                 ],
                 proxy={"server": proxy} if proxy else None
             )
-            context = await browser.new_context(
+            context = await browser.launch_persistent_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 viewport={"width": 1024, "height": 768},
                 java_script_enabled=True,
