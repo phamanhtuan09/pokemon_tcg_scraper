@@ -154,7 +154,8 @@ def parse_html_for_links(html: str) -> Tuple[List[str], List[Tuple[str, str]]]:
         "a.product-item",
         "a[href*='/products/']",
         "div.product-item a",   # fallback variations
-        "a[href^='/products/']"
+        "a.ProductCard_imageLink",
+        "div.ProductCard_content a"
     ]
     total_found = 0
     for sel in selectors:
@@ -243,6 +244,14 @@ app = Flask(__name__)
 @app.route("/")
 def home():
     return "JB Hi-Fi Pokémon scraper (Algolia + HTML fallback) running."
+
+@app.route("/debug/<path:filename>")
+def debug_file(filename):
+    try:
+        with open(filename, "r", encoding="utf-8") as f:
+            return f.read(), 200, {"Content-Type": "text/html"}
+    except Exception as e:
+        return f"Error: {e}", 404
 
 @app.route("/run")
 def run():
