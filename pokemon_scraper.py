@@ -114,7 +114,6 @@ async def scrape_jbhifi_playwright(proxy: str = None):
     try:
         async with async_playwright() as p:
             context = await p.chromium.launch(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 viewport={"width": 1024, "height": 768},
                 java_script_enabled=True,
                 bypass_csp=True,
@@ -126,11 +125,16 @@ async def scrape_jbhifi_playwright(proxy: str = None):
                     "--disable-gpu",
                     "--disable-dev-shm-usage",
                     "--disable-extensions",
-                    "--disable-background-networking"
+                    "--disable-background-networking",
+                    "--disable-sync",
+                    "--disable-translate",
+                    "--disable-blink-features=AutomationControlled",
+                    "--mute-audio"
                 ],
                 proxy={"server": proxy} if proxy else None
             )
             page = await context.new_page()
+            await page.set_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             await stealth_async(page)
 
             # Optional: block images/fonts for faster load
