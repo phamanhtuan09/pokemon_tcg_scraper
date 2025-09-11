@@ -109,7 +109,7 @@ def get_from_algolia() -> List[str]:
 async def fetch_js_rendered_links(url: str) -> List[str]:
     logger.info("Pyppeteer fallback: rendering JS page %s", url)
     try:
-        browser = await launch(headless=True,args=['--no-sandbox'])
+        browser = await launch(headless=True,args=['--no-sandbox', '--disable-setuid-sandbox'])
         page = await browser.newPage()
         await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                                 "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
