@@ -51,16 +51,27 @@ async def send_telegram_message(message: str):
     except Exception as e:
         logging.error(f"❌ Telegram error: {e}")
 
-# def send_file_to_telegram(file_path, caption="HTML snapshot"):
-#     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument"
-#     with open(file_path, "rb") as f:
-#         files = {"document": (file_path, f)}
-#         data = {
-#             "chat_id": TELEGRAM_CHAT_ID,
-#             "caption": caption
-#         }
-#         response = requests.post(url, data=data, files=files)
-#     return response.json()
+async def send_file_to_telegram(file_path: str, caption: str = "File"):
+    """
+    Gửi file qua Telegram Bot (async)
+    """
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        logging.warning("❌ Missing Telegram config.")
+        return
+
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument"
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            with open(file_path, "rb") as f:
+                files = {"document": (os.path.basename(file_path), f)}
+                data = {"chat_id": TELEGRAM_CHAT_ID, "caption": caption}
+                resp = await client.post(url, data=data, files=files)
+                resp.raise_for_status()
+                logging.info(f"📨 Telegram file sent: {file_path}")
+                return resp.json()
+    except Exception as e:
+        logging.error(f"❌ Failed to send file to Telegram: {e}")
+        return None
 
 # ============= SCRAPER =====================
 
@@ -104,7 +115,8 @@ async def scrape_jbhifi_playwright():
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                viewport={"width": 1280, "height": 800}
             )
             page = await context.new_page()
             await stealth_async(page)
@@ -117,40 +129,31 @@ async def scrape_jbhifi_playwright():
                 )
             )
 
+            logging.info(f"🌐 Opening {url}")
             await page.goto(url, wait_until="domcontentloaded", timeout=60000)
 
-            # Đợi phần tử chính xuất hiện
-            await page.wait_for_selector("a[href*='/products/']", timeout=10000)
-
-            # Fake user behavior
-            # page.mouse.move(100, 100)
-            # page.keyboard.press("ArrowDown")
-            # page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            # page.wait_for_timeout(5000)
+            # Fake user behavior: scroll + wait
+            await page.mouse.move(100, 100)
+            await page.keyboard.press("ArrowDown")
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await page.wait_for_timeout(5000)  # đợi AJAX load xong
             
-            # Đợi một chút nếu cần
-            # page.wait_for_timeout(2000)
+            # Chờ selector sản phẩm
+            try:
+                await page.wait_for_selector("a[href*='/products/']", timeout=15000)
+            except Exception:
+                html = await page.content()
+                file_path = "jb_debug.html"
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(html)
+                logging.warning(f"⚠️ Selector not found, saved HTML snapshot to {file_path}")
+                try:
+                    await send_file_to_telegram(file_path, caption="JB Hi-Fi snapshot")
+                except Exception:
+                    pass
+                raise Exception("⚠️ Could not find product links. Possibly blocked by Cloudflare.")
 
-            # Xuất HTML ra file và gửi qua Telegram
-            # html = page.content()
-            # file_path = "jb.html"
-            # with open(file_path, "w", encoding="utf-8") as f:
-            #     f.write(html)
-            
-            # send_file_to_telegram(file_path)
-
-            # Đợi selector sản phẩm thật
-            # try:
-            #     page.wait_for_selector("a[href*='/products/']", timeout=10000)
-            # except:
-            #     html = page.content()
-            #     ile_path = "jb.html"
-            #     with open(file_path, "w", encoding="utf-8") as f:
-            #         f.write(html)
-            #     send_html_to_telegram(file_path)  # hàm này bạn đã có
-            #     raise Exception("Không thấy sản phẩm – có thể bị Cloudflare chặn")
-
-            # Tùy vào layout mới của JB Hi-Fi
+            # Lấy tất cả product links
             a_tags = await page.query_selector_all("a[href*='/products/']")
             for a in a_tags:
                 href = await a.get_attribute("href")
@@ -162,7 +165,7 @@ async def scrape_jbhifi_playwright():
             logging.info(f"🔗 JB Hi-Fi (Playwright): {len(links)} links found")
             await context.close()
             await browser.close()
-        return list(set(links))
+            return list(set(links))
 
     except Exception as e:
         logging.error(f"❌ JB Hi-Fi Playwright error: {e}")
