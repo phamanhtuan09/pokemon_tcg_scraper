@@ -1,6 +1,6 @@
 fastapi
 uvicorn[standard]
 httpx
-playwright
+playwright==1.55.0
 beautifulsoup4
-git+https://github.com/AtuboDad/playwright-stealth.git
+https://github.com/AtuboDad/playwright-stealth/archive/refs/heads/master.zip
