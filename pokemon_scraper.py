@@ -94,7 +94,7 @@ def get_from_algolia() -> List[str]:
         logger.info("Algolia returned %d hits", len(hits))
         links = []
         for hit in hits:
-            if hit.get("preamble") == "Card Game" and hit.get("vendor") == "POKEMON TCG":
+            if hit.get("preamble") == "Card Game" and hit.get("vendor") == "POKEMON TCG" and hit.get("tags") == "INSTOCK":
                 handle = hit.get("handle")
                 if handle:
                     links.append(f"https://www.jbhifi.com.au/products/{handle}")
@@ -145,10 +145,10 @@ def get_from_pyppeteer(url: str) -> List[str]:
 
 # ---------------- Main crawl ----------------
 def crawl_links() -> List[str]:
-    links = get_from_algolia()
-    if links:
-        return links
-    logger.warning("Algolia empty, fallback to Pyppeteer")
+    # links = get_from_algolia()
+    # if links:
+    #     return links
+    # logger.warning("Algolia empty, fallback to Pyppeteer")
     return get_from_pyppeteer(COLLECTION_URL)
 
 # ---------------- Flask ----------------
