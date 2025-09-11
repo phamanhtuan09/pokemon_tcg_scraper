@@ -113,11 +113,7 @@ async def scrape_jbhifi_playwright(proxy: str = None):
     links = []
     try:
         async with async_playwright() as p:
-            context = await p.chromium.launch(
-                viewport={"width": 1024, "height": 768},
-                java_script_enabled=True,
-                bypass_csp=True,
-                record_har_path=None,
+            context = await p.chromium.launch_persistent_context(
                 user_data_dir=BROWSER_PROFILE_DIR,
                 headless=True,
                 args=[
@@ -133,17 +129,19 @@ async def scrape_jbhifi_playwright(proxy: str = None):
                 ],
                 proxy={"server": proxy} if proxy else None
             )
-            page = await context.new_page()
-            await page.set_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-            await stealth_async(page)
 
             # Optional: block images/fonts for faster load
+            page = await context.new_page()
             await page.route(
                 "**/*",
                 lambda route: asyncio.create_task(
                     route.abort() if route.request.resource_type in ["image", "stylesheet", "font"] else route.continue_()
                 )
             )
+
+            await page.set_viewport_size({"width": 1024, "height": 768})
+            await page.set_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            await stealth_async(page)
 
             logging.info(f"🌐 Opening {url}")
             await page.goto(url, wait_until="domcontentloaded", timeout=60000)
