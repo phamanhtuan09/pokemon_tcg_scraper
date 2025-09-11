@@ -1,6 +1,2 @@
-fastapi
-uvicorn[standard]
-httpx
-playwright==1.55.0
-beautifulsoup4
-https://github.com/AtuboDad/playwright_stealth/archive/refs/heads/main.zip
+flask
+requests
