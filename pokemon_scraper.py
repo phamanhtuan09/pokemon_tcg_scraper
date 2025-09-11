@@ -2,7 +2,6 @@ import os
 import json
 import time
 import logging
-import traceback
 from typing import List
 import requests
 from requests.adapters import HTTPAdapter
@@ -17,7 +16,7 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 CACHE_FILE = "cache.json"
 COLLECTION_URL = "https://www.jbhifi.com.au/collections/collectibles-merchandise/pokemon-trading-cards"
-SAVE_HTML_SNAPSHOT = os.getenv("SAVE_HTML_SNAPSHOT", "1")=="1"
+SAVE_HTML_SNAPSHOT = os.getenv("SAVE_HTML_SNAPSHOT", "1") == "1"
 
 ALGOLIA_URL = "https://vtvkm5urpx-2.algolianet.com/1/indexes/shopify_products_families/browse"
 ALGOLIA_HEADERS = {
@@ -25,7 +24,7 @@ ALGOLIA_HEADERS = {
     "x-algolia-api-key": "1d989f0839a992bbece9099e1b091f07",
     "x-algolia-application-id": "VTVKM5URPX",
 }
-ALGOLIA_PAYLOAD = {"hitsPerPage":1000}
+ALGOLIA_PAYLOAD = {"hitsPerPage": 1000}
 
 # ---------------- Logging ----------------
 logging.basicConfig(
@@ -43,9 +42,9 @@ def build_session() -> requests.Session:
     s.mount("http://", adapter)
     s.mount("https://", adapter)
     s.headers.update({
-        "User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept-Language":"en-US,en;q=0.9"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                      "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "en-US,en;q=0.9"
     })
     return s
 
@@ -55,9 +54,9 @@ def send_telegram_message(message: str):
         logger.warning("TELEGRAM_TOKEN or TELEGRAM_CHAT_ID not set, skip sending")
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {"chat_id":TELEGRAM_CHAT_ID,"text":message,"parse_mode":"Markdown","disable_web_page_preview":True}
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown", "disable_web_page_preview": True}
     try:
-        resp = requests.post(url,json=payload,timeout=10)
+        resp = requests.post(url, json=payload, timeout=10)
         resp.raise_for_status()
         logger.info("Sent Telegram message (len=%d)", len(message))
     except Exception as e:
@@ -67,7 +66,7 @@ def send_telegram_message(message: str):
 def load_cache() -> set:
     if os.path.exists(CACHE_FILE):
         try:
-            with open(CACHE_FILE,"r",encoding="utf-8") as f:
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
             logger.info("Loaded cache (%d entries)", len(data))
             return set(data)
@@ -77,7 +76,7 @@ def load_cache() -> set:
 
 def save_cache(s: set):
     try:
-        with open(CACHE_FILE,"w",encoding="utf-8") as f:
+        with open(CACHE_FILE, "w", encoding="utf-8") as f:
             json.dump(list(s), f)
         logger.info("Saved cache (%d entries)", len(s))
     except Exception as e:
@@ -91,11 +90,11 @@ def get_from_algolia() -> List[str]:
         r = session.post(ALGOLIA_URL, headers=ALGOLIA_HEADERS, json=ALGOLIA_PAYLOAD, timeout=20)
         r.raise_for_status()
         data = r.json()
-        hits = data.get("hits",[])
+        hits = data.get("hits", [])
         logger.info("Algolia returned %d hits", len(hits))
-        links=[]
+        links = []
         for hit in hits:
-            if hit.get("preamble")=="Card Game" and hit.get("vendor")=="POKEMON TCG":
+            if hit.get("preamble") == "Card Game" and hit.get("vendor") == "POKEMON TCG":
                 handle = hit.get("handle")
                 if handle:
                     links.append(f"https://www.jbhifi.com.au/products/{handle}")
@@ -109,27 +108,30 @@ def get_from_algolia() -> List[str]:
 async def fetch_js_rendered_links(url: str) -> List[str]:
     logger.info("Pyppeteer fallback: rendering JS page %s", url)
     try:
-        browser = await launch(headless=True,args=['--no-sandbox', '--disable-setuid-sandbox'])
+        browser = await launch(headless=True, args=['--no-sandbox', '--disable-setuid-sandbox'],
+                               executablePath=os.getenv("PYPPETEER_EXECUTABLE_PATH", "/usr/bin/chromium"))
         page = await browser.newPage()
         await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                                 "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        await page.goto(url,waitUntil='networkidle0',timeout=30000)
+        await page.goto(url, waitUntil='networkidle0', timeout=30000)
         content = await page.content()
         await browser.close()
+
         # Save debug HTML
-        fn=None
+        fn = None
         if SAVE_HTML_SNAPSHOT:
             fn = f"debug_page_{int(time.time())}.html"
-            with open(fn,"w",encoding="utf-8") as f:
+            with open(fn, "w", encoding="utf-8") as f:
                 f.write(content)
             logger.info("Saved debug HTML: %s", fn)
+
         # Parse links
-        soup=BeautifulSoup(content,"html.parser")
-        links=[]
+        soup = BeautifulSoup(content, "html.parser")
+        links = []
         for a in soup.select("a[href*='/products/']"):
-            href=a.get("href")
+            href = a.get("href")
             if href and href.startswith("/"):
-                href="https://www.jbhifi.com.au"+href
+                href = "https://www.jbhifi.com.au" + href
             if href not in links:
                 links.append(href)
         logger.info("Pyppeteer found %d product links", len(links))
@@ -138,7 +140,7 @@ async def fetch_js_rendered_links(url: str) -> List[str]:
         logger.error("Browser fetch error: %s", e)
         return []
 
-def get_from_pyppeteer(url:str) -> List[str]:
+def get_from_pyppeteer(url: str) -> List[str]:
     return asyncio.get_event_loop().run_until_complete(fetch_js_rendered_links(url))
 
 # ---------------- Main crawl ----------------
@@ -159,30 +161,30 @@ def home():
 @app.route("/run")
 def run():
     logger.info("----- /run triggered -----")
-    links=crawl_links()
-    cached=load_cache()
-    new_links=[l for l in links if l not in cached]
+    links = crawl_links()
+    cached = load_cache()
+    new_links = [l for l in links if l not in cached]
     logger.info("Total links: %d, new: %d", len(links), len(new_links))
     if new_links:
-        batch_size=25
-        for i in range(0,len(new_links),batch_size):
-            batch=new_links[i:i+batch_size]
-            message="*New JB Hi-Fi Pokémon Products:*\n\n"+"".join(batch)
+        batch_size = 25
+        for i in range(0, len(new_links), batch_size):
+            batch = new_links[i:i + batch_size]
+            message = "*New JB Hi-Fi Pokémon Products:*\n\n" + "\n".join(batch)
             send_telegram_message(message)
         cached.update(new_links)
         save_cache(cached)
     return jsonify({
-        "success":True,
-        "total_links":len(links),
-        "new_links":len(new_links)
+        "success": True,
+        "total_links": len(links),
+        "new_links": len(new_links)
     })
 
 @app.route("/debug/<path:filename>")
 def debug_file(filename):
     if os.path.exists(filename):
         return send_file(filename, mimetype="text/html")
-    return f"Debug file {filename} not found",404
+    return f"Debug file {filename} not found", 404
 
-if __name__=="__main__":
+if __name__ == "__main__":
     logger.info("Starting app on 0.0.0.0:5000")
     app.run(host="0.0.0.0", port=5000)
