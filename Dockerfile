@@ -12,4 +12,4 @@ RUN playwright install chromium
 
 EXPOSE 5000
 
-CMD ["python", "pokemo_scraper.py"]
+CMD ["python", "pokemon_scraper.py"]
