@@ -2,7 +2,6 @@
 FROM python:3.11-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
-ENV PYTHONUNBUFFERED=1
 
 # Cài các thư viện hệ thống mà Chromium cần + công cụ cơ bản
 RUN apt-get update && apt-get install -y --no-install-recommends \
