@@ -1,20 +1,17 @@
-# pokemon_scraper.py
 import os
 import json
-import time
 import logging
 import traceback
-from typing import List, Tuple, Optional
+import time
+from typing import List, Tuple
 import requests
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
-from bs4 import BeautifulSoup
 from flask import Flask, jsonify
+from bs4 import BeautifulSoup
 
 # ---------------- Config ----------------
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
-BROWSERLESS_URL = os.getenv("BROWSERLESS_URL")  # optional JS render backup
+BROWSERLESS_TOKEN = os.getenv("BROWSERLESS_TOKEN")
 
 ALGOLIA_URL = "https://vtvkm5urpx-2.algolianet.com/1/indexes/shopify_products_families/browse"
 ALGOLIA_HEADERS = {
@@ -23,146 +20,124 @@ ALGOLIA_HEADERS = {
     "x-algolia-application-id": "VTVKM5URPX",
 }
 ALGOLIA_PAYLOAD = {"hitsPerPage": 1000}
-
-CACHE_FILE = "cache.json"
 COLLECTION_URL = "https://www.jbhifi.com.au/collections/collectibles-merchandise/pokemon-trading-cards"
-
-FORCE_HTML = os.getenv("FORCE_HTML", "1") == "1"
-SAVE_HTML_SNAPSHOT = os.getenv("SAVE_HTML_SNAPSHOT", "1") == "1"
+CACHE_FILE = "cache.json"
 
 # ---------------- Logging ----------------
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-logging.basicConfig(
-    level=getattr(logging, LOG_LEVEL, logging.INFO),
-    format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[logging.FileHandler("scraper.log"), logging.StreamHandler()],
-)
+logging.basicConfig(level=getattr(logging, LOG_LEVEL, logging.INFO),
+                    format="%(asctime)s [%(levelname)s] %(message)s",
+                    handlers=[logging.FileHandler("scraper.log"), logging.StreamHandler()])
 logger = logging.getLogger(__name__)
-
-# ---------------- HTTP session with retries ----------------
-def build_session() -> requests.Session:
-    s = requests.Session()
-    retries = Retry(total=3, backoff_factor=0.6, status_forcelist=[429,500,502,503,504], allowed_methods=["GET","POST"])
-    adapter = HTTPAdapter(max_retries=retries)
-    s.mount("https://", adapter)
-    s.mount("http://", adapter)
-    s.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                      "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept-Language": "en-US,en;q=0.9",
-    })
-    return s
-
-# ---------------- Telegram ----------------
-def send_telegram_message(message: str):
-    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        logger.warning("TELEGRAM_TOKEN or TELEGRAM_CHAT_ID not set — skipping Telegram send")
-        return
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode":"Markdown", "disable_web_page_preview": True}
-    try:
-        resp = requests.post(url, json=payload, timeout=10)
-        resp.raise_for_status()
-        logger.info("Telegram message sent (length=%d)", len(message))
-    except Exception as e:
-        logger.error("Telegram send error: %s", e)
 
 # ---------------- Cache ----------------
 def load_cache() -> set:
     if os.path.exists(CACHE_FILE):
         try:
-            with open(CACHE_FILE, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            logger.info("Loaded cache (%d entries)", len(data))
-            return set(data)
+            return set(json.load(open(CACHE_FILE)))
         except Exception as e:
-            logger.error("Cache load error: %s", e)
+            logger.error(f"Failed to load cache: {e}")
     return set()
 
 def save_cache(s: set):
     try:
-        with open(CACHE_FILE, "w", encoding="utf-8") as f:
+        with open(CACHE_FILE, "w") as f:
             json.dump(list(s), f)
-        logger.info("Saved cache (%d entries)", len(s))
     except Exception as e:
-        logger.error("Cache save error: %s", e)
+        logger.error(f"Failed to save cache: {e}")
 
-# ---------------- Algolia ----------------
-def get_from_algolia() -> List[str]:
-    logger.info("Fetching from Algolia...")
-    session = build_session()
+# ---------------- Telegram ----------------
+def send_telegram_message(message: str):
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        logger.warning("Telegram not configured, skipping send")
+        return
     try:
-        r = session.post(ALGOLIA_URL, headers=ALGOLIA_HEADERS, json=ALGOLIA_PAYLOAD, timeout=20)
+        r = requests.post(f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage",
+                          json={"chat_id": TELEGRAM_CHAT_ID,
+                                "text": message,
+                                "parse_mode":"Markdown",
+                                "disable_web_page_preview":True},
+                          timeout=10)
+        r.raise_for_status()
+        logger.info(f"Telegram sent message length={len(message)}")
+    except Exception as e:
+        logger.error(f"Telegram send error: {e}")
+
+# ---------------- Algolia fetch ----------------
+def get_from_algolia() -> List[str]:
+    logger.info("Fetching from Algolia API...")
+    try:
+        r = requests.post(ALGOLIA_URL, headers=ALGOLIA_HEADERS, json=ALGOLIA_PAYLOAD, timeout=20)
         r.raise_for_status()
         hits = r.json().get("hits", [])
-        links = [f"https://www.jbhifi.com.au/products/{h['handle']}"
-                 for h in hits if h.get("preamble")=="Card Game" and h.get("vendor")=="POKEMON TCG" and h.get("handle")]
-        logger.info("Algolia filtered links: %d", len(links))
+        links = [f"https://www.jbhifi.com.au/products/{h['handle']}" 
+                 for h in hits 
+                 if h.get("preamble") == "Card Game" and h.get("vendor") == "POKEMON TCG" and h.get("handle")]
+        logger.info(f"Algolia returned {len(links)} Pokémon links")
         return links
     except Exception as e:
-        logger.error("Algolia fetch error: %s", e)
+        logger.error(f"Algolia fetch error: {e}")
         return []
 
-# ---------------- HTML fallback ----------------
+# ---------------- Browserless fetch ----------------
 def save_debug_html(content: str) -> str:
     ts = int(time.time())
-    fn = f"debug_page_{ts}.html"
+    fn = f"debug_browserless_{ts}.html"
     try:
         with open(fn, "w", encoding="utf-8") as f:
             f.write(content)
-        logger.info("Saved HTML snapshot: %s", fn)
+        logger.info(f"Saved debug HTML to {fn}")
         return fn
     except Exception as e:
-        logger.error("Failed to save HTML snapshot: %s", e)
+        logger.error(f"Failed to save debug HTML: {e}")
         return ""
 
-def parse_html_for_links(html: str) -> List[str]:
-    soup = BeautifulSoup(html, "html.parser")
-    found_links = []
-    for a in soup.select("a[href*='/products/']"):
-        href = a.get("href")
-        if href.startswith("/"):
-            href = "https://www.jbhifi.com.au" + href
-        if href not in found_links:
-            found_links.append(href)
-    return found_links
-
-def get_from_html() -> Tuple[List[str], Optional[str]]:
-    logger.info("HTML fallback fetching %s", COLLECTION_URL)
-    session = build_session()
+def get_from_browserless() -> List[str]:
+    if not BROWSERLESS_TOKEN:
+        logger.warning("BROWSERLESS_TOKEN not set, skipping Browserless")
+        return []
+    logger.info("Fetching via Browserless...")
     try:
-        r = session.get(COLLECTION_URL, timeout=25)
+        api_url = f"https://chrome.browserless.io/content?token={BROWSERLESS_TOKEN}&url={COLLECTION_URL}&options={{\"waitUntil\":\"networkidle0\"}}"
+        r = requests.get(api_url, timeout=30)
         r.raise_for_status()
-        links = parse_html_for_links(r.text)
-        debug_path = save_debug_html(r.text) if SAVE_HTML_SNAPSHOT and not links else None
-        logger.info("HTML fallback found %d links", len(links))
-        return links, debug_path
+        html = r.text
+        soup = BeautifulSoup(html, "html.parser")
+        links = []
+        samples = []
+        for a in soup.select("a[href*='/products/']"):
+            href = a.get("href")
+            if href.startswith("/"):
+                href = "https://www.jbhifi.com.au" + href
+            if href not in links:
+                links.append(href)
+                if len(samples)<20:
+                    samples.append((href, a.get_text(strip=True)))
+        if not links:
+            debug_file = save_debug_html(html)
+            logger.warning(f"No links found via Browserless. Debug saved: {debug_file}")
+        else:
+            logger.info(f"Browserless fetched {len(links)} links. Sample: {samples[:5]}")
+        return links
     except Exception as e:
-        logger.error("HTML fetch error: %s", e)
-        return [], None
+        logger.error(f"Browserless fetch error: {e}")
+        logger.debug(traceback.format_exc())
+        return []
 
-# ---------------- Main crawler ----------------
-def crawl_links() -> dict:
-    result = {"source": None, "links": [], "debug_html": None}
-    links = []
+# ---------------- Crawl ----------------
+def crawl_links() -> List[str]:
+    links = get_from_algolia()
+    # if not links:
+    #     logger.info("Algolia empty, fallback to Browserless")
+    #     links = get_from_browserless()
+    return links
 
-    if not FORCE_HTML:
-        links = get_from_algolia()
-        if links:
-            result["source"] = "algolia"
-    if not links:
-        links, debug_path = get_from_html()
-        result["source"] = "html"
-        result["debug_html"] = debug_path
-    result["links"] = links
-    return result
-
-# ---------------- Flask app ----------------
+# ---------------- Flask ----------------
 app = Flask(__name__)
 
 @app.route("/")
 def home():
-    return "JB Hi-Fi Pokémon scraper running"
+    return "JB Hi-Fi Pokémon scraper (Algolia + Browserless) running."
 
 @app.route("/debug/<path:filename>")
 def debug_file(filename):
@@ -175,30 +150,18 @@ def debug_file(filename):
 @app.route("/run")
 def run():
     logger.info("---- /run triggered ----")
-    crawl_result = crawl_links()
-    links = crawl_result.get("links", [])
-    debug_path = crawl_result.get("debug_html")
+    links = crawl_links()
     cached = load_cache()
     new_links = [l for l in links if l not in cached]
-    logger.info("Total links: %d, New links: %d", len(links), len(new_links))
-
     if new_links:
-        batch_size = 25
-        for i in range(0, len(new_links), batch_size):
-            batch = new_links[i:i+batch_size]
-            send_telegram_message("*New JB Hi-Fi Pokémon Products:*\n\n" + "\n".join(batch))
+        send_telegram_message("*New JB Hi-Fi Pokémon Products:*\n" + "\n".join(new_links))
         cached.update(new_links)
         save_cache(cached)
-    else:
-        logger.info("No new links to send via Telegram")
-
     return jsonify({
         "total_links": len(links),
-        "new_links": len(new_links),
-        "debug_html": debug_path
+        "new_links": len(new_links)
     })
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", 5000))
-    logger.info(f"Starting app on 0.0.0.0:{port}")
-    app.run(host="0.0.0.0", port=port)
+    logger.info("Starting app on 0.0.0.0:5000")
+    app.run(host="0.0.0.0", port=5000)
