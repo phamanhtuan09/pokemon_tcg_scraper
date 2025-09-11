@@ -106,7 +106,7 @@ async def scrape_site(name, url, selector, prefix, keyword="pokemon"):
     logging.info(f"🔗 {name}: {len(unique_links)} links found")
     return unique_links
 
-async def scrape_jbhifi_playwright():
+async def scrape_jbhifi_playwright(proxy: str = None):
     logging.info("🔍 Scraping JB Hi-Fi with Playwright")
     url = "https://www.jbhifi.com.au/collections/collectibles-merchandise/pokemon-trading-cards"
 
@@ -116,7 +116,7 @@ async def scrape_jbhifi_playwright():
             browser = await p.chromium.launch(
                 headless=True,
                 args=["--no-sandbox", "--disable-gpu"],
-                channel="chrome"
+                proxy={"server": proxy} if proxy else None
             )
             context = await browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -175,6 +175,26 @@ async def scrape_jbhifi_playwright():
         logging.error(f"❌ JB Hi-Fi Playwright error: {e}")
         return []
 
+def scrape_jbhifi_requests():
+    url = "https://www.jbhifi.com.au/collections/collectibles-merchandise/pokemon-trading-cards"
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=15)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        product_links = [a["href"] for a in soup.select("a[href*='/products/']") if a.get("href")]
+        product_links = ["https://www.jbhifi.com.au" + l if l.startswith("/") else l for l in product_links]
+        return list(set(product_links))
+    except Exception as e:
+        logging.error(f"❌ JB Hi-Fi requests fallback error: {e}")
+        return []
+
+async def scrape_jbhifi_combined(proxy: str = None):
+    links = await scrape_jbhifi_playwright(proxy=proxy)
+    if not links:
+        logging.info("⚠️ Playwright failed, using requests fallback")
+        links = scrape_jbhifi_requests()
+    return links
+
 # def scrape_kmart():
 #     logging.info("🔍 Scraping Kmart")
 #     url = "https://www.kmart.com.au/category/toys/pokemon-trading-cards/"
@@ -214,7 +234,7 @@ async def run_scraper():
 
     # Các trang web
     sites = {
-        "JB Hi-Fi": {"func": scrape_jbhifi_playwright},
+        "JB Hi-Fi": {"func": scrape_jbhifi_combined(proxy=None)},
         # "Kmart": {"func": scrape_kmart},
         "Target": {
             "url": f"https://www.target.com.au/search?text=trading+cards&group_id=W1852642",
