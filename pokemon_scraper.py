@@ -234,7 +234,7 @@ async def run_scraper():
 
     # Các trang web
     sites = {
-        "JB Hi-Fi": {"func": scrape_jbhifi_combined(proxy=None)},
+        "JB Hi-Fi": {"func": lambda: scrape_jbhifi_combined(proxy=None)},
         # "Kmart": {"func": scrape_kmart},
         "Target": {
             "url": f"https://www.target.com.au/search?text=trading+cards&group_id=W1852642",
