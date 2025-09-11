@@ -29,6 +29,10 @@ logging.basicConfig(
 
 # ---------------- Telegram ----------------
 def send_telegram_message(message: str):
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        logging.warning("Telegram not configured, skipping message send")
+        return
+
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
@@ -47,7 +51,8 @@ def send_telegram_message(message: str):
 def load_cache():
     if os.path.exists(CACHE_FILE):
         try:
-            return set(json.load(open(CACHE_FILE)))
+            with open(CACHE_FILE, "r") as f:
+                return set(json.load(f))
         except Exception as e:
             logging.error(f"Cache load error: {e}")
     return set()
@@ -91,7 +96,7 @@ def get_from_html():
         r.raise_for_status()
         soup = BeautifulSoup(r.text, "html.parser")
         links = []
-        for a in soup.select("a.card-link"):
+        for a in soup.select("a[href*='/products/']"):
             href = a.get("href")
             if href and "/products/" in href:
                 if href.startswith("/"):
@@ -147,4 +152,3 @@ def run():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
-
