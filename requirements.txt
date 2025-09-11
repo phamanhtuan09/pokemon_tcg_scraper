@@ -1,5 +1,6 @@
-flask
-requests
+fastapi
+uvicorn[standard]
+httpx
 playwright
 beautifulsoup4
 playwright-stealth
