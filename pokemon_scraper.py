@@ -257,11 +257,17 @@ async def run_scraper():
 
 # ============= HTTP ENDPOINTS ==============
 
-@app.get("/run")
-async def run():
-    logging.info("🔁 /run endpoint triggered.")
-    return { "message": "Scraper started!" }
-
 @app.get("/")
 async def home():
     return { "status": "🟢 Pokemon Scraper Bot is running." }
+
+@app.get("/run")
+async def run():
+    logging.info("🔁 /run endpoint triggered.")
+    asyncio.create_task(run_scraper())
+    return { "message": "Scraper started!" }
+
+# ================ MAIN ======================
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=10000)
