@@ -25,14 +25,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Copy và cài dependencies Python
+# Copy requirements & cài pip packages (cache tốt)
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Cài Chromium cho Pyppeteer local
+# Cài Chromium cho Pyppeteer
 RUN python -m pyppeteer install --local
 
-# Copy toàn bộ source code
+# Copy source code
 COPY . .
 
 # ---------------- Stage 2: Runtime ----------------
@@ -40,12 +40,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy Python packages và source code từ builder
+# Copy pip packages từ builder
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy Chromium cache & source code
 COPY --from=builder /app /app
 
-# Environment variables cho Pyppeteer
+# Set Pyppeteer env
 ENV PYPPETEER_HOME=/app/.pyppeteer
 ENV PUPPETEER_EXECUTABLE_PATH=/app/.pyppeteer/chrome-linux/chrome
 
