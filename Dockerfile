@@ -1,50 +1,35 @@
-# ---------------- Build stage ----------------
-FROM python:3.11-slim AS builder
+# ---------------- Stage 1: Build ----------------
+FROM python:3.12-slim AS builder
 
-# Cài pip packages
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Copy source code
-COPY . .
-
-# ---------------- Runtime stage ----------------
-FROM python:3.11-slim
-
-# Cài Chromium + thư viện runtime cho Pyppeteer
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Cài hệ thống cơ bản + Chromium
+RUN apt-get update && apt-get install -y \
     chromium \
-    fonts-liberation \
-    libnss3 \
-    libatk1.0-0 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libdrm2 \
-    libxkbcommon0 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxrandr2 \
-    libgbm1 \
-    libpango-1.0-0 \
-    libasound2 \
-    libx11-xcb1 \
-    libxshmfence1 \
-    libxrender1 \
-    libxi6 \
-    libxext6 \
+    wget \
+    curl \
+    ca-certificates \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy pip + source code từ stage build
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /app /app
+# Copy requirements và cài pip
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Cho Pyppeteer biết path Chromium system
+# ---------------- Stage 2: Final ----------------
+FROM python:3.12-slim
+
+# Copy Chromium từ builder
+COPY --from=builder /usr/bin/chromium /usr/bin/chromium
+COPY --from=builder /usr/lib/chromium/ /usr/lib/chromium/
+
+WORKDIR /app
+COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY . .
+
+# Set executable path cho Pyppeteer
 ENV PYPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-ENV PYPPETEER_HOME=/root/.pyppeteer
+ENV SAVE_HTML_SNAPSHOT=1
 
 EXPOSE 5000
-
 CMD ["python", "pokemon_scraper.py"]
