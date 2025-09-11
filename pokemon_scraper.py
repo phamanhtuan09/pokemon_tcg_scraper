@@ -67,11 +67,20 @@ def crawl_links():
     logging.info("Starting Playwright scraping...")
     links = set()
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
+        browser = p.chromium.launch(
+            headless=True,
+            args=[
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--single-process"
+            ]
+        )
         context = browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                        "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            viewport={"width": 1280, "height": 800},
+            viewport={"width": 1024, "height": 768},
             java_script_enabled=True
         )
         page = context.new_page()
@@ -86,28 +95,32 @@ def crawl_links():
         except PlaywrightTimeoutError as e:
             logging.error(f"Page.goto timeout: {e}")
             page.screenshot(path="error_screenshot.png")
+            browser.close()
             return []
 
-        # Scroll & load dynamically
+        # Scroll batch nhỏ để tiết kiệm memory
         last_height = 0
-        for i in range(50):  # max scroll 50 lần
-            page.evaluate("window.scrollBy(0, window.innerHeight)")
-            time.sleep(random.uniform(1.0, 2.5))  # random delay chống bot
+        max_scroll_batches = 10
+        for batch in range(max_scroll_batches):
+            for i in range(3):  # 3 lần mỗi batch
+                page.evaluate("window.scrollBy(0, window.innerHeight)")
+                time.sleep(random.uniform(1.0, 2.5))  # random delay chống bot
             new_height = page.evaluate("document.body.scrollHeight")
             logging.info(f"Scroll batch {i+1}, new_height={new_height}")
             if new_height == last_height:
                 logging.info("No more scroll, reached bottom")
                 break
             last_height = new_height
-
-        # Lấy tất cả link sản phẩm
-        elems = page.query_selector_all("a[href*='/products/']")
-        for e in elems:
-            href = e.get_attribute("href")
-            if href and "/products/" in href:
-                if href.startswith("/"):
-                    href = "https://www.jbhifi.com.au" + href
-                links.add(href)
+    
+            # Lấy link từng batch
+            elems = page.query_selector_all("a[href*='/products/']")
+            for e in elems:
+                href = e.get_attribute("href")
+                if href and "/products/" in href:
+                    if href.startswith("/"):
+                        href = "https://www.jbhifi.com.au" + href
+                    links.add(href)
+            logging.info(f"Links collected so far: {len(links)}")
 
         browser.close()
     logging.info(f"Total links scraped: {len(links)}")
