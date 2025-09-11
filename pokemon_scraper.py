@@ -115,7 +115,11 @@ async def scrape_jbhifi_playwright(proxy: str = None):
         async with async_playwright() as p:
             context = await p.chromium.launch_persistent_context(
                 user_data_dir=BROWSER_PROFILE_DIR,
+                viewport={"width": 1024, "height": 768},
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
                 headless=True,
+                java_script_enabled=True,
+                bypass_csp=True,
                 args=[
                     "--no-sandbox",
                     "--disable-gpu",
@@ -139,8 +143,6 @@ async def scrape_jbhifi_playwright(proxy: str = None):
                 )
             )
 
-            await page.set_viewport_size({"width": 1024, "height": 768})
-            await page.set_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
             await stealth_async(page)
 
             logging.info(f"🌐 Opening {url}")
