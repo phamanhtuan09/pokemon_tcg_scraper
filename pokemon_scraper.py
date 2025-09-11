@@ -3,7 +3,6 @@ import os
 import json
 import logging
 import asyncio
-import threading
 import httpx
 from fastapi import FastAPI
 from playwright.async_api import async_playwright
@@ -19,6 +18,7 @@ SEARCH_KEYWORDS = 'pokemon trading cards'
 CACHE_FILE = 'cache.json'
 HEADERS = {"User-Agent": "Mozilla/5.0"}
 MAX_RETRIES = 3
+BROWSER_PROFILE_DIR = "/app/browser_profile"  # Lưu session/tiết kiệm recheck Cloudflare
 
 logging.basicConfig(
     level=logging.INFO,
@@ -115,12 +115,22 @@ async def scrape_jbhifi_playwright(proxy: str = None):
         async with async_playwright() as p:
             browser = await p.chromium.launch(
                 headless=True,
-                args=["--no-sandbox", "--disable-gpu"],
+                args=[
+                    "--no-sandbox",
+                    "--disable-gpu",
+                    "--disable-dev-shm-usage",
+                    "--disable-extensions",
+                    "--disable-background-networking"
+                ],
                 proxy={"server": proxy} if proxy else None
             )
             context = await browser.new_context(
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                viewport={"width": 1280, "height": 800}
+                viewport={"width": 1024, "height": 768},
+                java_script_enabled=True,
+                bypass_csp=True,
+                record_har_path=None,
+                user_data_dir=BROWSER_PROFILE_DIR
             )
             page = await context.new_page()
             await stealth_async(page)
@@ -138,7 +148,6 @@ async def scrape_jbhifi_playwright(proxy: str = None):
 
             # Fake user behavior: scroll + wait
             await page.mouse.move(100, 100)
-            await page.keyboard.press("ArrowDown")
             await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
             await page.wait_for_timeout(5000)  # đợi AJAX load xong
             
