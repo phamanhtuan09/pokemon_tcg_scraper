@@ -119,7 +119,10 @@ async def fetch_js_rendered_links(url: str) -> List[str]:
                 "--disable-dev-shm-usage",
                 "--disable-gpu",
                 "--disable-software-rasterizer",
-                "--single-process"
+                "--single-process",
+                "--disable-background-timer-throttling",
+                "--disable-renderer-backgrounding",
+                "--disable-backgrounding-occluded-windows"
             ],
             executablePath=os.getenv("PYPPETEER_EXECUTABLE_PATH", "/usr/bin/chromium")
         )
