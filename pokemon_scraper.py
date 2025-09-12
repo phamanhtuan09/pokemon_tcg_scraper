@@ -141,7 +141,7 @@ async def fetch_js_rendered_links(url: str) -> List[str]:
         return []
 
 def get_from_pyppeteer(url: str) -> List[str]:
-    return asyncio.get_event_loop().run_until_complete(fetch_js_rendered_links(url))
+    return asyncio.run(fetch_js_rendered_links(url))
 
 # ---------------- Main crawl ----------------
 def crawl_links() -> List[str]:
