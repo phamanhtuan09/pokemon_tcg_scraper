@@ -113,7 +113,13 @@ async def fetch_js_rendered_links(url: str) -> List[str]:
             handleSIGINT=False,
             handleSIGTERM=False,
             handleSIGHUP=False,
-            args=['--no-sandbox', '--disable-setuid-sandbox'],
+            args=[
+                '--no-sandbox', 
+                '--disable-setuid-sandbox', 
+                "--disable-dev-shm-usage",
+                "--disable-gpu",
+                "--disable-software-rasterizer"
+            ],
             executablePath=os.getenv("PYPPETEER_EXECUTABLE_PATH", "/usr/bin/chromium")
         )
         page = await browser.newPage()
