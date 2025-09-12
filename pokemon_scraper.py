@@ -131,9 +131,12 @@ async def fetch_js_rendered_links(url: str) -> List[str]:
         page = await browser.newPage()
 
         await page.setRequestInterception(True)
-        page.on("request", lambda req: asyncio.ensure_future(
-            req.abort() if req.resourceType in ["image", "stylesheet", "font"] else req.continue_()
-        ))
+        def intercept(req):
+            if req.resourceType in ["image", "media", "font", "beacon", "script"]:
+                asyncio.ensure_future(req.abort())
+            else:
+                asyncio.ensure_future(req.continue_())
+        page.on("request", intercept)
 
         await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                                 "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
@@ -145,7 +148,7 @@ async def fetch_js_rendered_links(url: str) -> List[str]:
         # Scroll xuống để load lazy content (nếu có)
         for _ in range(5):
             await page.evaluate("window.scrollBy(0, document.body.scrollHeight)")
-            await page.waitForTimeout(2000)
+            await asyncio.sleep(2)
         
         content = await page.content()
         await browser.close()
