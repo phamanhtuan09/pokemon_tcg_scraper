@@ -119,11 +119,6 @@ async def fetch_js_rendered_links(url: str) -> List[str]:
                 "--disable-dev-shm-usage",
                 "--disable-gpu",
                 "--disable-software-rasterizer",
-                "--disable-extensions",
-                "--disable-background-networking",
-                "--disable-default-apps",
-                "--disable-sync",
-                "--disable-translate",
                 "--single-process"
             ],
             executablePath=os.getenv("PYPPETEER_EXECUTABLE_PATH", "/usr/bin/chromium")
@@ -139,7 +134,7 @@ async def fetch_js_rendered_links(url: str) -> List[str]:
         await page.goto(url, waitUntil='domcontentloaded', timeout=60000)
 
         # Chờ selector product xuất hiện
-        await page.waitForSelector("a.ProductCard_imageLink[href*='/products/']", {"timeout": 30000})
+        await page.waitForSelector("a[href*='/products/']", {"timeout": 30000})
 
         # Scroll xuống để load lazy content (nếu có)
         for _ in range(5):
