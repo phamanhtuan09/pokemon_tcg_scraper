@@ -1,24 +1,13 @@
-# ---------------- Stage 1: Build ----------------
-FROM python:3.12-slim AS builder
+FROM python:3.12-slim
 
-RUN apt-get update && apt-get install -y \
-    wget \
-    curl \
-    ca-certificates \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
+# Cài Python lib
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ---------------- Stage 2: Final ----------------
-FROM python:3.12-slim
-
-# Cài Chromium và các thư viện cần thiết
+# Cài Chromium và dependencies cơ bản, bỏ sandbox
 RUN apt-get update && apt-get install -y \
     chromium \
-    chromium-sandbox \
     fonts-liberation \
     libasound2 \
     libatk1.0-0 \
@@ -42,10 +31,8 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
 COPY . .
 
-# Set executable path cho Pyppeteer
 ENV PYPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
 ENV SAVE_HTML_SNAPSHOT=1
 
