@@ -128,9 +128,15 @@ async def fetch_js_rendered_links(url: str) -> List[str]:
             executablePath=os.getenv("PYPPETEER_EXECUTABLE_PATH", "/usr/bin/chromium")
         )
         page = await browser.newPage()
+
+        await page.setRequestInterception(True)
+        page.on("request", lambda req: asyncio.ensure_future(
+            req.abort() if req.resourceType in ["image", "stylesheet", "font"] else req.continue_()
+        ))
+
         await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                                 "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        await page.goto(url, waitUntil='networkidle2', timeout=60000)
+        await page.goto(url, waitUntil='domcontentloaded', timeout=120000)
         content = await page.content()
         await browser.close()
 
