@@ -1,11 +1,6 @@
 FROM python:3.12-slim
 
-# Cài Python lib
-WORKDIR /app
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Cài Chromium và dependencies cơ bản, bỏ sandbox
+# Install Chromium
 RUN apt-get update && apt-get install -y \
     chromium \
     fonts-liberation \
@@ -30,11 +25,16 @@ RUN apt-get update && apt-get install -y \
     libxtst6 \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Python dependencies
 WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
 COPY . .
 
+# Environment
 ENV PYPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
-ENV SAVE_HTML_SNAPSHOT=1
+ENV SAVE_HTML_SNAPSHOT=0
 
 EXPOSE 5000
 CMD ["python", "pokemon_scraper.py"]
