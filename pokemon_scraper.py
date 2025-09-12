@@ -131,13 +131,9 @@ async def fetch_js_rendered_links(url: str) -> List[str]:
         page = await browser.newPage()
 
         await page.setRequestInterception(True)
-        def intercept(req):
-            if req.resourceType in ["image", "media", "font", "beacon", "script"]:
-                asyncio.ensure_future(req.abort())
-            else:
-                asyncio.ensure_future(req.continue_())
-        page.on("request", intercept)
-
+        page.on("request", lambda req: asyncio.ensure_future(
+            req.abort() if req.resourceType in ["image", "media", "font", "script", "beacon"] else req.continue_()
+        ))
         await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                                 "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         await page.goto(url, waitUntil='domcontentloaded', timeout=60000)
